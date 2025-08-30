@@ -1,5 +1,3 @@
-// src/services/storage.js
-// Robust client storage for scans. Primary: IndexedDB (Blobs). Fallback: localStorage (data URLs).
 
 const DB_NAME = "pokedex-scanner";
 const STORE = "scans";

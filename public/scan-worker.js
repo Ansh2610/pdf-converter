@@ -1,8 +1,3 @@
-/* public/scan-worker.js
-   Image-only scanner worker (OpenCV.js)
-   - Perspective fix prefers big, document-like quads
-   - Runs in a Web Worker so the UI stays responsive
-*/
 const CV_URL = "https://docs.opencv.org/4.x/opencv.js";
 self.importScripts(CV_URL);
 

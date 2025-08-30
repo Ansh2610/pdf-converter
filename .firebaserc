@@ -1,5 +1,8 @@
 {
   "projects": {
-    "default": "pdf-converter-2610"
-  }
+    "default": "pokedex-scanner-c99cd",
+    "staging": "pokedex-scanner-c99cd"
+  },
+  "targets": {},
+  "etags": {}
 }

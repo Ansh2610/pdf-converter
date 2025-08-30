@@ -1,4 +1,3 @@
-// src/hooks/useAuth.js
 import { createContext, useContext, useEffect, useState } from "react";
 
 const AuthCtx = createContext(null);
