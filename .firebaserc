@@ -1,8 +1,5 @@
 {
   "projects": {
-    "default": "pokedex-scanner-c99cd",
-    "staging": "pokedex-scanner-c99cd"
-  },
-  "targets": {},
-  "etags": {}
+    "default": "pokedex-scanner-c99cd"
+  }
 }

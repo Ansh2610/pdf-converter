@@ -1,35 +1,20 @@
-import { createContext, useContext, useEffect, useState } from "react";
+// src/hooks/useAuth.js
+import { useState, useEffect } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '../services/firebase';
 
-const AuthCtx = createContext(null);
-
-export function AuthProvider({ children }) {
+export const useAuth = () => {
   const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  // load from localStorage
   useEffect(() => {
-    const cached = localStorage.getItem("auth_user");
-    if (cached) setUser(JSON.parse(cached));
-    else setUser({ uid: "guest", email: "guest@local" });
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setUser(user);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
-  const signIn = async (email) => {
-    const u = { uid: `user-${btoa(email)}`, email };
-    localStorage.setItem("auth_user", JSON.stringify(u));
-    setUser(u);
-  };
-
-  const signOut = async () => {
-    localStorage.removeItem("auth_user");
-    setUser({ uid: "guest", email: "guest@local" });
-  };
-
-  return (
-    <AuthCtx.Provider value={{ user, signIn, signOut }}>
-      {children}
-    </AuthCtx.Provider>
-  );
-}
-
-export function useAuth() {
-  return useContext(AuthCtx);
-}
+  return { user, loading };
+};

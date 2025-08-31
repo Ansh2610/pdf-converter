@@ -1,38 +1,34 @@
 {
-  "name": "pdf-converter",
-  "version": "0.1.0",
+  "name": "pokedex-scanner",
+  "version": "1.0.0",
   "private": true,
   "dependencies": {
-    "@testing-library/dom": "^10.4.1",
-    "@testing-library/jest-dom": "^6.8.0",
-    "@testing-library/react": "^16.3.0",
-    "@testing-library/user-event": "^13.5.0",
-    "antd": "^5.27.1",
-    "file-saver": "^2.0.5",
-    "firebase": "^12.2.1",
-    "idb-keyval": "^6.2.2",
-    "jszip": "^3.10.1",
-    "pdfjs-dist": "^4.10.38",
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1",
-    "react-dropzone": "^14.3.8",
-    "react-pdf-to-image": "^1.0.2",
-    "react-router-dom": "^7.8.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "react-scripts": "5.0.1",
-    "react-zoom-pan-pinch": "^3.7.0",
-    "uuid": "^11.1.0",
-    "web-vitals": "^2.1.4"
+    "firebase": "^10.7.0",
+    "styled-components": "^6.1.0",
+    "react-router-dom": "^6.20.0",
+    "react-dropzone": "^14.2.3",
+    "react-compare-image": "^3.4.0",
+    "react-image-crop": "^10.1.8",
+    "konva": "^9.2.3",
+    "react-konva": "^18.2.10",
+    "uuid": "^9.0.1",
+    "file-saver": "^2.0.5"
   },
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "deploy": "npm run build && firebase deploy",
+    "deploy:hosting": "npm run build && firebase deploy --only hosting",
+    "deploy:rules": "firebase deploy --only firestore:rules,storage:rules"
   },
   "eslintConfig": {
     "extends": [
-      "react-app",
-      "react-app/jest"
+      "react-app"
     ]
   },
   "browserslist": {
