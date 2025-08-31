@@ -55,12 +55,25 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Set a timeout to prevent infinite loading
+    const timeout = setTimeout(() => {
+      setLoading(false);
+    }, 5000); // 5 second timeout
+
     const unsubscribe = onAuthStateChanged(auth, (user) => {
+      clearTimeout(timeout);
       setUser(user);
+      setLoading(false);
+    }, (error) => {
+      console.error('Auth state change error:', error);
+      clearTimeout(timeout);
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      clearTimeout(timeout);
+      unsubscribe();
+    };
   }, []);
 
   if (loading) {
@@ -80,13 +93,6 @@ function App() {
       <Router>
         <Routes>
           <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
-          <Route path="/" element={
-            <ProtectedRoute user={user}>
-              <Container user={user}>
-                <Upload />
-              </Container>
-            </ProtectedRoute>
-          } />
           <Route path="/gallery" element={
             <ProtectedRoute user={user}>
               <Container user={user}>
@@ -94,6 +100,15 @@ function App() {
               </Container>
             </ProtectedRoute>
           } />
+          <Route path="/" element={
+            <ProtectedRoute user={user}>
+              <Container user={user}>
+                <Upload />
+              </Container>
+            </ProtectedRoute>
+          } />
+          {/* Catch all route */}
+          <Route path="*" element={<Navigate to={user ? "/" : "/login"} />} />
         </Routes>
       </Router>
     </ThemeProvider>
