@@ -1,12 +1,12 @@
 // src/components/Gallery/Gallery.js
 import { useState, useEffect } from 'react';
 import styled from 'styled-components';
-import { collection, query, where, orderBy, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
 import { ref, deleteObject } from 'firebase/storage';
+import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db, storage } from '../../services/firebase';
 import { saveAs } from 'file-saver';
 import ScanCard from './ScanCard';
-import ReactCompareImage from 'react-compare-image';
 
 const Container = styled.div`
   width: 100%;
@@ -105,12 +105,23 @@ const Button = styled.button`
   font-size: 16px;
 `;
 
-const CompareContainer = styled.div`
+const ImageContainer = styled.div`
   margin: 20px 0;
   border: 2px solid #5a7a5a;
   border-radius: 10px;
   overflow: hidden;
   max-height: 500px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #0f380f;
+`;
+
+const ScanImage = styled.img`
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
 `;
 
 const Info = styled.div`
@@ -142,31 +153,94 @@ function Gallery() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [selectedScan, setSelectedScan] = useState(null);
+  const [authUser, setAuthUser] = useState(null);
 
+  // Monitor auth state
   useEffect(() => {
-    if (!auth.currentUser) return;
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      console.log('Gallery: Auth state changed:', user?.uid || 'No user');
+      setAuthUser(user);
+    });
+    return () => unsubscribe();
+  }, []);
 
-    // Real-time listener for user's scans
-    const q = query(
-      collection(db, 'scans'),
-      where('userId', '==', auth.currentUser.uid),
-      orderBy('createdAt', 'desc')
-    );
+  // Firestore listener for user's scans subcollection
+  useEffect(() => {
+    if (!authUser) {
+      console.log('Gallery: No authenticated user');
+      setLoading(false);
+      setScans([]);
+      return;
+    }
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const scanData = [];
+    console.log('Gallery: Setting up listener for user subcollection:', authUser.uid);
+
+    // Query user's scans subcollection
+    const userScansRef = collection(db, 'users', authUser.uid, 'scans');
+    
+    const unsubscribe = onSnapshot(userScansRef, (snapshot) => {
+      console.log('Gallery: Received user subcollection snapshot with', snapshot.size, 'documents');
+      const userScans = [];
+      
       snapshot.forEach((doc) => {
-        scanData.push({ id: doc.id, ...doc.data() });
+        const data = doc.data();
+        console.log('Gallery: User scan document:', { id: doc.id, ...data });
+        userScans.push({ id: doc.id, ...data });
       });
-      setScans(scanData);
+      
+      console.log('Gallery: User documents found:', userScans.length);
+      
+      // Sort manually by createdAt if available, newest first
+      userScans.sort((a, b) => {
+        if (a.createdAt && b.createdAt) {
+          try {
+            return b.createdAt.toDate() - a.createdAt.toDate();
+          } catch (e) {
+            console.error('Error sorting by date:', e);
+            return 0;
+          }
+        }
+        return 0;
+      });
+      
+      setScans(userScans);
       setLoading(false);
     }, (error) => {
-      console.error('Error fetching scans:', error);
-      setLoading(false);
+      console.error('Gallery: Error fetching user scans:', error);
+      // Try fallback to legacy collection
+      console.log('Gallery: Trying legacy collection as fallback...');
+      setupLegacyListener(authUser.uid);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [authUser]);
+
+  // Fallback function for legacy scans collection
+  const setupLegacyListener = (userId) => {
+    const legacyQuery = query(
+      collection(db, 'scans'),
+      where('userId', '==', userId)
+    );
+    
+    const unsubscribe = onSnapshot(legacyQuery, (snapshot) => {
+      console.log('Gallery: Legacy collection snapshot with', snapshot.size, 'documents');
+      const userScans = [];
+      
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        console.log('Gallery: Legacy scan document:', { id: doc.id, ...data });
+        userScans.push({ id: doc.id, ...data });
+      });
+      
+      setScans(userScans);
+      setLoading(false);
+    }, (error) => {
+      console.error('Gallery: Error with legacy collection too:', error);
+      setLoading(false);
+    });
+    
+    return unsubscribe;
+  };
 
   const getFilteredScans = () => {
     const now = new Date();
@@ -176,13 +250,25 @@ function Gallery() {
     switch (filter) {
       case 'today':
         return scans.filter(scan => {
-          const scanDate = scan.createdAt.toDate();
-          return scanDate >= today;
+          if (!scan.createdAt) return false;
+          try {
+            const scanDate = scan.createdAt.toDate();
+            return scanDate >= today;
+          } catch (error) {
+            console.error('Error parsing date:', error);
+            return false;
+          }
         });
       case 'week':
         return scans.filter(scan => {
-          const scanDate = scan.createdAt.toDate();
-          return scanDate >= weekAgo;
+          if (!scan.createdAt) return false;
+          try {
+            const scanDate = scan.createdAt.toDate();
+            return scanDate >= weekAgo;
+          } catch (error) {
+            console.error('Error parsing date:', error);
+            return false;
+          }
         });
       default:
         return scans;
@@ -191,12 +277,29 @@ function Gallery() {
 
   const handleDownload = async (scan, type = 'processed') => {
     try {
+      console.log('Gallery: Downloading scan:', type, scan);
       const url = type === 'original' ? scan.originalUrl : scan.processedUrl;
+      
+      if (!url) {
+        console.error('Gallery: No URL available for download type:', type);
+        alert(`No ${type} image available for download`);
+        return;
+      }
+      
+      console.log('Gallery: Fetching URL:', url);
       const response = await fetch(url);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const blob = await response.blob();
-      saveAs(blob, `${scan.filename}_${type}.png`);
+      const filename = `${scan.filename || 'scan'}_${type}.png`;
+      console.log('Gallery: Downloading as:', filename);
+      saveAs(blob, filename);
     } catch (error) {
-      console.error('Download error:', error);
+      console.error('Gallery: Download error:', error);
+      alert('Error downloading file. Please try again.');
     }
   };
 
@@ -204,21 +307,30 @@ function Gallery() {
     if (!window.confirm('Delete this scan?')) return;
 
     try {
-      // Delete from Storage
-      const originalRef = ref(storage, `scans/${scan.userId}/${scan.scanId}/original.png`);
-      const processedRef = ref(storage, `scans/${scan.userId}/${scan.scanId}/processed.png`);
+      console.log('Gallery: Deleting scan:', scan);
+      
+      // Delete from Storage - use the userId from auth or scan data
+      const userId = authUser?.uid || scan.userId;
+      const originalRef = ref(storage, `scans/${userId}/${scan.scanId}/original.png`);
+      const processedRef = ref(storage, `scans/${userId}/${scan.scanId}/processed.png`);
       
       await Promise.all([
-        deleteObject(originalRef).catch(() => {}),
-        deleteObject(processedRef).catch(() => {})
+        deleteObject(originalRef).catch((error) => {
+          console.log('Error deleting original file (may not exist):', error);
+        }),
+        deleteObject(processedRef).catch((error) => {
+          console.log('Error deleting processed file (may not exist):', error);
+        })
       ]);
 
-      // Delete from Firestore
-      await deleteDoc(doc(db, 'scans', scan.id));
+      // Delete from Firestore - use user subcollection
+      await deleteDoc(doc(db, 'users', userId, 'scans', scan.id));
       
+      console.log('Gallery: Successfully deleted scan');
       setSelectedScan(null);
     } catch (error) {
-      console.error('Delete error:', error);
+      console.error('Gallery: Delete error:', error);
+      alert('Error deleting scan. Please try again.');
     }
   };
 
@@ -236,6 +348,16 @@ function Gallery() {
   return (
     <Container>
       <Title>📚 SCAN GALLERY</Title>
+      
+      {/* Debug info */}
+      <div style={{ 
+        textAlign: 'center', 
+        marginBottom: '10px', 
+        fontSize: '12px', 
+        color: '#5a7a5a' 
+      }}>
+        Debug: User: {authUser?.uid || 'None'} | Total scans: {scans.length} | Filtered: {filteredScans.length} | Loading: {loading.toString()}
+      </div>
       
       <FilterBar>
         <FilterButton 
@@ -274,39 +396,70 @@ function Gallery() {
             <ScanCard 
               key={scan.id} 
               scan={scan} 
-              onClick={() => setSelectedScan(scan)}
+              onClick={() => {
+                console.log('Gallery: Opening scan modal for:', scan);
+                setSelectedScan(scan);
+              }}
             />
           ))}
         </Grid>
       )}
 
       {selectedScan && (
-        <Modal onClick={() => setSelectedScan(null)}>
-          <ModalContent onClick={(e) => e.stopPropagation()}>
+        <Modal onClick={() => {
+          console.log('Gallery: Closing modal');
+          setSelectedScan(null);
+        }}>
+          <ModalContent onClick={(e) => {
+            console.log('Gallery: Modal content clicked, preventing close');
+            e.stopPropagation();
+          }}>
             <ModalHeader>
               <ModalTitle>📄 {selectedScan.filename}</ModalTitle>
-              <Button onClick={() => setSelectedScan(null)}>✕</Button>
+              <Button onClick={() => {
+                console.log('Gallery: Close button clicked');
+                setSelectedScan(null);
+              }}>✕</Button>
             </ModalHeader>
             
-            <CompareContainer>
-              <ReactCompareImage
-                leftImage={selectedScan.originalUrl}
-                rightImage={selectedScan.processedUrl}
-                leftImageLabel="ORIGINAL"
-                rightImageLabel="PROCESSED"
-                sliderLineColor="#dc0a2d"
-                sliderLineWidth={3}
-              />
-            </CompareContainer>
+            <ImageContainer>
+              {selectedScan.processedUrl ? (
+                <ScanImage 
+                  src={selectedScan.processedUrl} 
+                  alt={selectedScan.filename}
+                  onError={(e) => {
+                    console.error('Gallery: Error loading processed image');
+                    e.target.style.display = 'none';
+                  }}
+                />
+              ) : (
+                <div style={{ 
+                  padding: '40px', 
+                  textAlign: 'center', 
+                  color: '#5a7a5a' 
+                }}>
+                  <p>⚠️ No processed image available</p>
+                </div>
+              )}
+            </ImageContainer>
             
             <ButtonGroup>
-              <Button onClick={() => handleDownload(selectedScan, 'processed')}>
+              <Button onClick={() => {
+                console.log('Gallery: Download processed button clicked');
+                handleDownload(selectedScan, 'processed');
+              }}>
                 💾 DOWNLOAD PROCESSED
               </Button>
-              <Button onClick={() => handleDownload(selectedScan, 'original')}>
+              <Button onClick={() => {
+                console.log('Gallery: Download original button clicked');
+                handleDownload(selectedScan, 'original');
+              }}>
                 📥 DOWNLOAD ORIGINAL
               </Button>
-              <Button danger onClick={() => handleDelete(selectedScan)}>
+              <Button danger onClick={() => {
+                console.log('Gallery: Delete button clicked');
+                handleDelete(selectedScan);
+              }}>
                 🗑️ DELETE
               </Button>
             </ButtonGroup>
