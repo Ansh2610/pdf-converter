@@ -17,6 +17,7 @@ env/
 
 # Project specific
 data/usda_cache/
+data/*.db
 models/*.pkl
 *.log
 

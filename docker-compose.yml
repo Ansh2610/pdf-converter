@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: nutriscan_db
+    environment:
+      POSTGRES_DB: nutriscan
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: nutriscan123
+    ports:
+      - "5432:5432"
+    volumes:
+      - nutriscan_data:/var/lib/postgresql/data
+
+volumes:
+  nutriscan_data:
