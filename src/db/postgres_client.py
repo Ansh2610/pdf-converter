@@ -1,4 +1,7 @@
-"""PostgreSQL database client and schema management."""
+"""Database client and schema management (PostgreSQL or SQLite)."""
+
+import os
+from pathlib import Path
 
 from sqlalchemy import (
     create_engine,
@@ -15,7 +18,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import sessionmaker, relationship, declarative_base
 from sqlalchemy.sql import func
 
-from src.utils import get_env, load_config
+from src.utils import get_env, load_config, get_project_root
 
 Base = declarative_base()
 
@@ -119,25 +122,40 @@ class MealPlan(Base):
 # ============================================================================
 
 class DatabaseClient:
-    """Manages PostgreSQL database connections."""
+    """Manages database connections (PostgreSQL or SQLite)."""
 
     def __init__(self):
         self.engine = None
         self.Session = None
+        self.db_type = os.getenv("DB_TYPE", "sqlite")  # Default to SQLite
+
+    def _get_db_url(self) -> str:
+        """Build database URL based on DB_TYPE."""
+        if self.db_type == "sqlite":
+            db_path = get_project_root() / "data" / "nutriscan.db"
+            db_path.parent.mkdir(parents=True, exist_ok=True)
+            return f"sqlite:///{db_path}"
+        else:
+            return (
+                f"postgresql://{get_env('DB_USER')}:{get_env('DB_PASSWORD')}"
+                f"@{get_env('DB_HOST')}:{get_env('DB_PORT')}/{get_env('DB_NAME')}"
+            )
 
     def connect(self) -> None:
         """Establish database connection."""
-        db_url = (
-            f"postgresql://{get_env('DB_USER')}:{get_env('DB_PASSWORD')}"
-            f"@{get_env('DB_HOST')}:{get_env('DB_PORT')}/{get_env('DB_NAME')}"
-        )
+        db_url = self._get_db_url()
         config = load_config()
-        self.engine = create_engine(
-            db_url,
-            pool_size=config["database"]["pool_size"],
-            max_overflow=config["database"]["max_overflow"],
-        )
+
+        if self.db_type == "sqlite":
+            self.engine = create_engine(db_url, echo=False)
+        else:
+            self.engine = create_engine(
+                db_url,
+                pool_size=config["database"]["pool_size"],
+                max_overflow=config["database"]["max_overflow"],
+            )
         self.Session = sessionmaker(bind=self.engine)
+        print(f"Connected to {self.db_type} database")
 
     def create_tables(self) -> None:
         """Create all tables if they don't exist."""
