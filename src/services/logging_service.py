@@ -178,6 +178,7 @@ class LoggingService:
                     func.coalesce(func.sum(Food.carbs_g * MealLog.servings), 0).label("carbs"),
                     func.coalesce(func.sum(Food.fat_g * MealLog.servings), 0).label("fat"),
                 )
+                .select_from(MealLog)
                 .join(Food, MealLog.food_id == Food.food_id)
                 .filter(MealLog.user_id == user_id, MealLog.log_date == log_date)
                 .first()
