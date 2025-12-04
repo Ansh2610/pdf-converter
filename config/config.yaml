@@ -1,0 +1,26 @@
+# NutriScan Configuration
+
+usda_api:
+  base_url: "https://api.nal.usda.gov/fdc/v1"
+  cache_ttl_days: 30
+  default_page_size: 50
+
+database:
+  pool_size: 5
+  max_overflow: 10
+
+nutrition:
+  # Target tolerance for "met" status (within X%)
+  target_tolerance: 0.10
+
+  # Default targets for new users
+  default_calorie_target: 2000
+  default_protein_target: 150
+  default_carb_target: 200
+  default_fat_target: 65
+
+meal_types:
+  - breakfast
+  - lunch
+  - dinner
+  - snack
